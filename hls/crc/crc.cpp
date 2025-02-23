@@ -29,10 +29,11 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "crc.hpp"
 #include <rocev2_config.hpp>
+#include <typeinfo>
 
 //TODO is packet aligned to 32bytes??
 //TODO move onto memory write path or where CRC is checked
-template <int WIDTH, int INSTID = 0>
+template <int WIDTH, typename MARKER = void>
 void extract_icrc(	stream<net_axis<WIDTH> >&		input,
 #ifdef DISABLE_CRC_CHECK
 					stream<net_axis<WIDTH> >&		output)
@@ -189,23 +190,10 @@ void extract_icrc(	stream<net_axis<WIDTH> >&		input,
 
 }
 
-/*
- * Append ICRC over GRH, IBA Headers & Payload
- * RoCEv2: Replace in IPv6: traffic class, flow label, hop_limit, udp checksum with '1'
- * BTH: ignore Resv8a
- * hop limit is always FF
- */
-template <int WIDTH, int INSTID = 0>
-void mask_header_fields(stream<net_axis<WIDTH> >& input,
-						stream<net_axis<WIDTH> >& dataOut,
-						stream<net_axis<WIDTH> >& maskedDataOut)
-{
-#pragma HLS inline off
-#pragma HLS pipeline II=1
-
+ap_uint<424> compute_header_mask() {
 	// Define a mask to mask out components of the incoming packet that don't need to be included into icrc-calculation
 	//mask containig all of these fields
-	const static ap_uint<424> one_mask = 0;
+	ap_uint<424> one_mask = 0;
 	// traffic class
 	one_mask(3, 0) = 0xF;
 	one_mask(11, 8) = 0xF;
@@ -218,6 +206,24 @@ void mask_header_fields(stream<net_axis<WIDTH> >& input,
 	one_mask(383, 368) = 0xFFFF;
 	// BTH Resv8a
 	one_mask(423,416) = 0xFF;
+    return one_mask;
+}
+
+/*
+ * Append ICRC over GRH, IBA Headers & Payload
+ * RoCEv2: Replace in IPv6: traffic class, flow label, hop_limit, udp checksum with '1'
+ * BTH: ignore Resv8a
+ * hop limit is always FF
+ */
+template <int WIDTH, typename marker = void>
+void mask_header_fields(stream<net_axis<WIDTH> >& input,
+						stream<net_axis<WIDTH> >& dataOut,
+						stream<net_axis<WIDTH> >& maskedDataOut)
+{
+#pragma HLS inline off
+#pragma HLS pipeline II=1
+
+	const static ap_uint<424> one_mask = compute_header_mask();
 
 	// Variables for the length of the header and a counter of the word 
 	const static ap_uint<3> header_length = (424/WIDTH);
@@ -235,7 +241,7 @@ void mask_header_fields(stream<net_axis<WIDTH> >& input,
 		// Treat incoming words that are part of the packet 
 		if (ai_wordCount < header_length)
 		{
-            std::cout << "[ NODE: " << INSTID << ", MASK_HEADER() ]: Less than header" << std::endl;
+            std::cout << "[ NODE: " << typeid(marker).name() << ", MASK_HEADER() ]: Less than header" << std::endl;
 			//std::cout << "applied mask: " << ai_wordCount << ", range: (" << std::dec << (int) ((ai_wordCount+1)*WIDTH)-1 << "," << (int) (ai_wordCount*WIDTH) << ")" << std::endl;
 			
 			// Apply correct part of the one-mask to the header currently under review
@@ -245,7 +251,7 @@ void mask_header_fields(stream<net_axis<WIDTH> >& input,
 		// Last part of the header 
 		else if (ai_wordCount == header_length)
 		{
-            std::cout << "[ NODE: " << INSTID << ", MASK_HEADER() ]: Equal header" << std::endl;
+            std::cout << "[ NODE: " << typeid(marker).name() << ", MASK_HEADER() ]: Equal header" << std::endl;
 			//std::cout << "aaapplied mask: " << ai_wordCount << ", range: (" << std::dec << (int) 423 << "," << (int) (ai_wordCount*WIDTH) << ")" << std::endl;
 			
 			// Apply correct part of the one-mask to the header currently under review
@@ -260,18 +266,18 @@ void mask_header_fields(stream<net_axis<WIDTH> >& input,
 
 		// Increase word count to orient within the received packet 
 		ai_wordCount++;
-        std::cout << "[ NODE: " << INSTID << ", MASK_HEADER() ]: Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
+        std::cout << "[ NODE: " << typeid(marker).name() << ", MASK_HEADER() ]: Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
 		
 		// If received word is last part of a packet, reset the ai_wordCounter. 
 		if (currWord.last)
 		{
-            std::cout << "[ NODE: " << INSTID << ", MASK_HEADER() ]: Written last" << std::endl;
+            std::cout << "[ NODE: " << typeid(marker).name() << ", MASK_HEADER() ]: Written last" << std::endl;
 			ai_wordCount = 0;
 		}
 	}
 }
 
-template <int WIDTH, int INSTID = 0>
+template <int WIDTH, typename marker = void>
 void drop_invalid_crc(	stream<net_axis<WIDTH> >& input,
 						stream<ap_uint<32> >& crcFifo,
 						stream<ap_uint<32> >& calcCrcFifo,
@@ -337,7 +343,7 @@ void drop_invalid_crc(	stream<net_axis<WIDTH> >& input,
 
 
 // Module to actually calculate CRC32, used on the output path. 
-template <int WIDTH, int INSTID = 0>
+template <int WIDTH, typename marker = void>
 void compute_crc32(	stream<net_axis<WIDTH> >& input,
 					stream<ap_uint<32> >& output)
 {
@@ -364,7 +370,7 @@ void compute_crc32(	stream<net_axis<WIDTH> >& input,
 		if (!input.empty())
 		{
 			input.read(currWord);
-            std::cout << "[ NODE: " << INSTID << ", CRC() ]: State FIRST, Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
+            std::cout << "[ NODE: " << typeid(marker).name() << ", CRC() ]: State FIRST, Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
 			/*std::cout << "CRC32:";
 			print(std::cout, currWord);
 			std::cout << std::endl;*/
@@ -399,7 +405,7 @@ void compute_crc32(	stream<net_axis<WIDTH> >& input,
 		// Iterate over the second half and apply calculations. 
 		for (int i = (WIDTH/8/2); i < (WIDTH/8); i++)
 		{
-            //std::cout << "[ NODE: " << INSTID << ", CRC() ]: State SECOND, Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
+            //std::cout << "[ NODE: " << typeid(marker).name() << ", CRC() ]: State SECOND, Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
 			#pragma HLS UNROLL
 			if (currWord.keep[i])
 			{
@@ -415,7 +421,7 @@ void compute_crc32(	stream<net_axis<WIDTH> >& input,
 		if (currWord.last)
 		{
 			output.write(crc);
-            std::cout << "[ NODE: " << INSTID << ", CRC() ]: CRC computed " << std::hex << crc << std::dec << std::endl;
+            std::cout << "[ NODE: " << typeid(marker).name() << ", CRC() ]: CRC computed " << std::hex << crc << std::dec << std::endl;
 			//std::cout << std::endl;
 			//std::cout << "CRC["<< DUMMY << "]: "<< std::hex << ~crc << std::endl;
 			//reset
@@ -430,10 +436,10 @@ void compute_crc32(	stream<net_axis<WIDTH> >& input,
 }
 
 //packets are multiple of 4 bytes, crc is 4 bytes
-template <int WIDTH, int INSTID = 0>
+template <int WIDTH, typename marker = void>
 void insert_icrc(
 #ifndef DISABLE_CRC_CALCULATION
-					stream<ap_uint<32> >& crc,
+					stream<ap_uint<32> >& crc_in,
 #endif
 					stream<net_axis<WIDTH> >& input,
 					stream<net_axis<WIDTH> >& output)
@@ -457,10 +463,10 @@ void insert_icrc(
 	{
 #ifndef DISABLE_CRC_CALCULATION
 	case CRC:
-		if (!crc.empty())
+		if (!crc_in.empty())
 		{
-			crc.read(crc);
-            std::cout << "[ NODE: " << INSTID << ", INSERT_CRC() ]:  CRC " << std::hex << crc  << std::dec << std::endl;
+			crc_in.read(crc);
+            std::cout << "[ NODE: " << typeid(marker).name() << ", INSERT_CRC() ]:  CRC " << std::hex << crc  << std::dec << std::endl;
 			crc = ~crc;
 			ii_state = FWD;
 		}
@@ -470,89 +476,89 @@ void insert_icrc(
 		if (!input.empty())
 		{
 			input.read(currWord);
-            std::cout << "[ NODE: " << INSTID << ", INSERT_CRC() ]:  Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
-// 			if (currWord.last)
-// 			{
-// 				//Check if word is full
-// 				if (currWord.keep[(WIDTH/8)-1] == 1)
-// 				{
-// 					currWord.last = 0;
-// 					ii_state = POST;
-// 				}
-// 				else
-// 				{
-// #ifndef DISABLE_CRC_CALCULATION
-// 					ii_state = CRC;
-// #endif
-// 					ap_uint<64> keep = currWord.keep; //this is required to make the case statement work for all widths
-// 					switch(keep)
-// 					{
-// 					case 0xF:
-// 						currWord.data(63, 32) = crc;
-// 						currWord.keep(7,4) = 0xF;
-// 						break;
-// 					case 0xFF:
-// 						currWord.data(95, 64) = crc;
-// 						currWord.keep(11,8) = 0xF;
-// 						break;
-// 					case 0xFFF:
-// 						currWord.data(127, 96) = crc;
-// 						currWord.keep(15,12) = 0xF;
-// 						break;
-// 					case 0xFFFF:
-// 						currWord.data(159, 128) = crc;
-// 						currWord.keep(19,16) = 0xF;
-// 						break;
-// 					case 0xFFFFF:
-// 						currWord.data(191, 160) = crc;
-// 						currWord.keep(23,20) = 0xF;
-// 						break;
-// 					case 0xFFFFFF:
-// 						currWord.data(223, 192) = crc;
-// 						currWord.keep(27,24) = 0xF;
-// 						break;
-// 					case 0xFFFFFFF:
-// 						currWord.data(255, 224) = crc;
-// 						currWord.keep(31,28) = 0xF;
-// 						break;
-// 					case 0xFFFFFFFF:
-// 						currWord.data(287, 256) = crc;
-// 						currWord.keep(35,32) = 0xF;
-// 						break;
-// 					case 0xFFFFFFFFF:
-// 						currWord.data(319, 288) = crc;
-// 						currWord.keep(39,36) = 0xF;
-// 						break;
-// 					case 0xFFFFFFFFFF:
-// 						currWord.data(351, 320) = crc;
-// 						currWord.keep(43,40) = 0xF;
-// 						break;
-// 					case 0xFFFFFFFFFFF:
-// 						currWord.data(383, 352) = crc;
-// 						currWord.keep(47,44) = 0xF;
-// 						break;
-// 					case 0xFFFFFFFFFFFF:
-// 						currWord.data(415, 384) = crc;
-// 						currWord.keep(51,48) = 0xF;
-// 						break;
-// 					case 0xFFFFFFFFFFFFF:
-// 						currWord.data(447, 416) = crc;
-// 						currWord.keep(55,52) = 0xF;
-// 						break;
-// 					case 0xFFFFFFFFFFFFFF:
-// 						currWord.data(479, 448) = crc;
-// 						currWord.keep(59,56) = 0xF;
-// 						break;
-// 					case 0xFFFFFFFFFFFFFFF:
-// 						currWord.data(511, 480) = crc;
-// 						currWord.keep(63,60) = 0xF;
-// 						break;
-// 					//case 0xFFFFFFFF:
-// 						//TODO should not be reached
-// 						//break;
-// 					} //switch
-// 				} //keep
-// 			} //last
+            std::cout << "[ NODE: " << typeid(marker).name() << ", INSERT_CRC() ]:  Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
+			if (currWord.last)
+			{
+				//Check if word is full
+				if (currWord.keep[(WIDTH/8)-1] == 1)
+				{
+					currWord.last = 0;
+					ii_state = POST;
+				}
+				else
+				{
+#ifndef DISABLE_CRC_CALCULATION
+					ii_state = CRC;
+#endif
+					ap_uint<64> keep = currWord.keep; //this is required to make the case statement work for all widths
+					switch(keep)
+					{
+					case 0xF:
+						currWord.data(63, 32) = crc;
+						currWord.keep(7,4) = 0xF;
+						break;
+					case 0xFF:
+						currWord.data(95, 64) = crc;
+						currWord.keep(11,8) = 0xF;
+						break;
+					case 0xFFF:
+						currWord.data(127, 96) = crc;
+						currWord.keep(15,12) = 0xF;
+						break;
+					case 0xFFFF:
+						currWord.data(159, 128) = crc;
+						currWord.keep(19,16) = 0xF;
+						break;
+					case 0xFFFFF:
+						currWord.data(191, 160) = crc;
+						currWord.keep(23,20) = 0xF;
+						break;
+					case 0xFFFFFF:
+						currWord.data(223, 192) = crc;
+						currWord.keep(27,24) = 0xF;
+						break;
+					case 0xFFFFFFF:
+						currWord.data(255, 224) = crc;
+						currWord.keep(31,28) = 0xF;
+						break;
+					case 0xFFFFFFFF:
+						currWord.data(287, 256) = crc;
+						currWord.keep(35,32) = 0xF;
+						break;
+					case 0xFFFFFFFFF:
+						currWord.data(319, 288) = crc;
+						currWord.keep(39,36) = 0xF;
+						break;
+					case 0xFFFFFFFFFF:
+						currWord.data(351, 320) = crc;
+						currWord.keep(43,40) = 0xF;
+						break;
+					case 0xFFFFFFFFFFF:
+						currWord.data(383, 352) = crc;
+						currWord.keep(47,44) = 0xF;
+						break;
+					case 0xFFFFFFFFFFFF:
+						currWord.data(415, 384) = crc;
+						currWord.keep(51,48) = 0xF;
+						break;
+					case 0xFFFFFFFFFFFFF:
+						currWord.data(447, 416) = crc;
+						currWord.keep(55,52) = 0xF;
+						break;
+					case 0xFFFFFFFFFFFFFF:
+						currWord.data(479, 448) = crc;
+						currWord.keep(59,56) = 0xF;
+						break;
+					case 0xFFFFFFFFFFFFFFF:
+						currWord.data(511, 480) = crc;
+						currWord.keep(63,60) = 0xF;
+						break;
+					//case 0xFFFFFFFF:
+						//TODO should not be reached
+						//break;
+					} //switch
+				} //keep
+			} //last
 			output.write(currWord);
 		}
 		break;
@@ -573,7 +579,7 @@ void insert_icrc(
 }
 
 // To keep up with line rate, ICRC32-calculation is split up in two parallel paths. This module does the arbitration. 
-template <int WIDTH, int INSTID = 0>
+template <int WIDTH, typename MARKER = void>
 void round_robin_arbiter(stream<net_axis<WIDTH> >& in,
 						stream<net_axis<WIDTH> >& out1,
 						stream<net_axis<WIDTH> >& out2)
@@ -594,25 +600,25 @@ void round_robin_arbiter(stream<net_axis<WIDTH> >& in,
 		if (one)
 		{
 			out1.write(currWord);
-            //std::cout << "[ NODE: " << INSTID << ", ROUND_ROBIN_ARBITER() ]: Send to 1, Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
+            //std::cout << "[ NODE: " << typeid(marker).name() << ", ROUND_ROBIN_ARBITER() ]: Send to 1, Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
 		}
 		else
 		{
 			out2.write(currWord);
-            //std::cout << "[ NODE: " << INSTID << ", ROUND_ROBIN_ARBITER() ]: Send to 2, Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
+            //std::cout << "[ NODE: " << typeid(marker).name() << ", ROUND_ROBIN_ARBITER() ]: Send to 2, Data " << std::hex << currWord.data << ", Last " << currWord.last << std::dec << std::endl;
 		}
 
 		// Starting next incoming packet: Switch to the other CRC-calculator. 
 		if (currWord.last)
 		{
 			one = !one;
-            //std::cout << "[ NODE: " << INSTID << ", ROUND_ROBIN_ARBITER() ]: Swap" << std::endl;
+            //std::cout << "[ NODE: " << typeid(marker).name() << ", ROUND_ROBIN_ARBITER() ]: Swap" << std::endl;
 		}
 	}
 }
 
 // Merges input from the two CRC-calculator modules. 
-template <int INSTID = 0>
+template <typename marker>
 void round_robin_merger(stream<ap_uint<32> >& in1,
 						stream<ap_uint<32> >& in2,
 						stream<ap_uint<32> >& out)
@@ -628,7 +634,7 @@ void round_robin_merger(stream<ap_uint<32> >& in1,
 	{
 		if (!in1.empty())
 		{
-			//std::cout << "[ NODE: " << INSTID << ", ROUND_ROBIN_MERGER() ]: Merge from 1" << std::endl;
+			//std::cout << "[ NODE: " << typeid(marker).name() << ", ROUND_ROBIN_MERGER() ]: Merge from 1" << std::endl;
             out.write(in1.read());
             
 			one_m = !one_m;
@@ -638,7 +644,7 @@ void round_robin_merger(stream<ap_uint<32> >& in1,
 	{
 		if (!in2.empty())
 		{
-			//std::cout << "[ NODE: " << INSTID << ", ROUND_ROBIN_MERGER() ]: Merge from 2" << std::endl;
+			//std::cout << "[ NODE: " << typeid(marker).name() << ", ROUND_ROBIN_MERGER() ]: Merge from 2" << std::endl;
             out.write(in2.read());
             
 			one_m = !one_m;
@@ -658,6 +664,15 @@ void crc(
 	ap_uint<32>&                regCrcDropPkgCount
 ) {
 #pragma HLS INLINE
+
+    // Marker structs for the instances
+    struct rx {};
+    struct tx {};
+
+    struct rxcrc1 {};
+    struct rxcrc2 {};
+    struct txcrc1 {};
+    struct txcrc2 {};
 
 	/*
 	 * RX
@@ -685,15 +700,15 @@ void crc(
 
 #ifdef DISABLE_CRC_CHECK
 	regCrcDropPkgCount = 0;
-	extract_icrc<WIDTH, INSTID>(s_axis_rx_data, m_axis_rx_data);
+	extract_icrc<WIDTH, rx>(s_axis_rx_data, m_axis_rx_data);
 #else
-	extract_icrc<WIDTH, INSTID>(s_axis_rx_data, rx_dataFifo, rx_crcFifo);
-	mask_header_fields<WIDTH, INSTID>(rx_dataFifo, rx_crcDataFifo, rx_maskedDataFifo);
-	round_robin_arbiter<WIDTH, INSTID>(rx_maskedDataFifo, rx_maskedDataFifo1, rx_maskedDataFifo2);
-	compute_crc32<WIDTH, INSTID>(rx_maskedDataFifo1, rx_calcCrcFifo1);
-	compute_crc32<WIDTH, INSTID>(rx_maskedDataFifo2, rx_calcCrcFifo2);
-	round_robin_merger<INSTID>(rx_calcCrcFifo1, rx_calcCrcFifo2, rx_calcCrcFifo);
-	drop_invalid_crc<WIDTH, INSTID>(rx_crcDataFifo, rx_crcFifo, rx_calcCrcFifo, m_axis_rx_data, regCrcDropPkgCount);
+	extract_icrc<WIDTH, rx>(s_axis_rx_data, rx_dataFifo, rx_crcFifo);
+	mask_header_fields<WIDTH, rx>(rx_dataFifo, rx_crcDataFifo, rx_maskedDataFifo);
+	round_robin_arbiter<WIDTH, rx>(rx_maskedDataFifo, rx_maskedDataFifo1, rx_maskedDataFifo2);
+	compute_crc32<WIDTH, rxcrc1>(rx_maskedDataFifo1, rx_calcCrcFifo1);
+	compute_crc32<WIDTH, rxcrc2>(rx_maskedDataFifo2, rx_calcCrcFifo2);
+	round_robin_merger<rx>(rx_calcCrcFifo1, rx_calcCrcFifo2, rx_calcCrcFifo);
+	drop_invalid_crc<WIDTH, rx>(rx_crcDataFifo, rx_crcFifo, rx_calcCrcFifo, m_axis_rx_data, regCrcDropPkgCount);
 #endif
 
 	/*
@@ -717,14 +732,14 @@ void crc(
 #endif
 
 #ifdef DISABLE_CRC_CALCULATION
-	insert_icrc<WIDTH, INSTID>(s_axis_tx_data, m_axis_tx_data);
+	insert_icrc<WIDTH, tx>(s_axis_tx_data, m_axis_tx_data);
 #else
-	mask_header_fields<WIDTH, INSTID>(s_axis_tx_data, tx_crcDataFifo, tx_maskedDataFifo);
-	round_robin_arbiter<WIDTH, INSTID>(tx_maskedDataFifo, tx_maskedDataFifo1, tx_maskedDataFifo2);
-	compute_crc32<WIDTH, INSTID>(tx_maskedDataFifo1, crcFifo1);
-	compute_crc32<WIDTH, INSTID>(tx_maskedDataFifo2, crcFifo2);
-	round_robin_merger<INSTID>(crcFifo1, crcFifo2, crcFifo);
-	insert_icrc<WIDTH, INSTID>(crcFifo, tx_crcDataFifo, m_axis_tx_data);
+	mask_header_fields<WIDTH, tx>(s_axis_tx_data, tx_crcDataFifo, tx_maskedDataFifo);
+	round_robin_arbiter<WIDTH, tx>(tx_maskedDataFifo, tx_maskedDataFifo1, tx_maskedDataFifo2);
+	compute_crc32<WIDTH, txcrc1>(tx_maskedDataFifo1, crcFifo1);
+	compute_crc32<WIDTH, txcrc2>(tx_maskedDataFifo2, crcFifo2);
+	round_robin_merger<tx>(crcFifo1, crcFifo2, crcFifo);
+	insert_icrc<WIDTH, tx>(crcFifo, tx_crcDataFifo, m_axis_tx_data);
 #endif
 
 }
@@ -739,4 +754,4 @@ template void crc<DATA_WIDTH, ninst>(		    	            \
 );
 
 crc_spec_decla(0);
-crc_spec_decla(1);
+/*crc_spec_decla(1);*/
