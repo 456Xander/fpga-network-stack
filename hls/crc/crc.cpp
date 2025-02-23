@@ -754,4 +754,4 @@ template void crc<DATA_WIDTH, ninst>(		    	            \
 );
 
 crc_spec_decla(0);
-/*crc_spec_decla(1);*/
+crc_spec_decla(1);
