@@ -172,6 +172,74 @@ void rocev2(
     
 }
 
+template<int width>
+size_t count_trailing_zeros(ap_uint<width> value) {
+    for (int i = 0; i < width; i++) {
+        if (value.test(i)) {
+            return i;
+        }
+    }
+    return width;
+}
+
+void unpack_qp_context(
+    hls::stream<ap_uint<160>>& in_stream,
+    hls::stream<qpContext>& out_stream
+) {
+    #pragma HLS INLINE
+
+    ap_uint<160> data = in_stream.read();
+    qpContext unpacked;
+    ap_uint<6> state_onehot = data(5, 0);
+    unpacked.newState = static_cast<qpState>(count_trailing_zeros(state_onehot));
+    unpacked.qp_num = data(29, 6);
+    unpacked.remote_psn = data(53, 30);
+    unpacked.local_psn = data(77, 54);
+    unpacked.r_key = data(109, 78);
+    unpacked.virtual_address = data(157, 110);
+
+    out_stream.write(unpacked);
+}
+
+void unpack_if_conn_req(
+    hls::stream<ap_uint<184>>& in_stream,
+    hls::stream<ifConnReq>& out_stream
+) {
+    #pragma HLS INLINE
+
+    ap_uint<184> data = in_stream.read();
+    ifConnReq unpacked;
+    unpacked.qpn = data(15, 0);
+    unpacked.remote_qpn = data(39, 16);
+    unpacked.remote_ip_address = data(167, 40);
+    unpacked.remote_udp_port = data(183, 168);
+
+    out_stream.write(unpacked);
+}
+
+void unpack_tx_meta(
+    hls::stream<ap_uint<240>>& in_stream,
+    hls::stream<txMeta>& out_stream
+) {
+    #pragma HLS INLINE
+
+    ap_uint<240> data = in_stream.read();
+    txMeta unpacked;
+
+    ap_uint<18> opcode_oneshot = data(17, 0);
+    unpacked.op_code = static_cast<ibOpCode>(count_trailing_zeros(opcode_oneshot));
+    unpacked.qpn = data(33, 18);
+    unpacked.host = data(34, 34);
+    unpacked.lst = data(35, 35);
+    unpacked.offs = data(41, 36);
+    unpacked.raddr = data(105, 42);
+    unpacked.laddr = data(169, 106);
+    unpacked.len = data(201, 170);
+    unpacked.imm = data(233, 202);
+
+    out_stream.write(unpacked);
+}
+
 // This function converts a stream of memCmd to a stream of ap_uint<128>
 // It assumes that 'num_cmds' commands will be processed.
 void convert_memCmd_stream(
@@ -241,7 +309,7 @@ void rocev2_top(
 	stream<ap_axiu<DATA_WIDTH, 0, 0, 0> >& s_axis_rx_data,
 	stream<ap_axiu<DATA_WIDTH, 0, 0, 0> >& m_axis_tx_data,
 				
-	stream<txMeta>&	s_axis_sq_meta,
+	stream<ap_uint<240>>&	s_axis_sq_meta,
 
 	stream<ackMeta>& m_axis_rx_ack_meta,
 				
@@ -252,8 +320,8 @@ void rocev2_top(
 	stream<ap_axiu<DATA_WIDTH, 0, 0, 0> >& s_axis_mem_read_data,
 
 	//Interface
-	stream<qpContext>& s_axis_qp_interface,
-	stream<ifConnReq>& s_axis_qp_conn_interface,
+	stream<ap_uint<160>>& s_axis_qp_interface,
+	stream<ap_uint<184>>& s_axis_qp_conn_interface,
 	ap_uint<128> local_ip_address,
 
 	//Debug output
@@ -324,6 +392,10 @@ void rocev2_top(
     static hls::stream<memCmd> mem_read_cmd_internal;
 	/*#pragma HLS STREAM depth=2 variable=mem_read_cmd_internal*/
 
+    static hls::stream<txMeta> sq_meta_internal;
+    static hls::stream<qpContext> qp_context_internal;
+    static hls::stream<ifConnReq> conn_req_internal;
+
 	convert_axis_to_net_axis<DATA_WIDTH>(s_axis_rx_data, s_axis_rx_data_internal);
 
 	convert_net_axis_to_axis<DATA_WIDTH>(m_axis_tx_data_internal, m_axis_tx_data);
@@ -332,11 +404,15 @@ void rocev2_top(
 
 	convert_net_axis_to_axis<DATA_WIDTH>(m_axis_mem_write_data_internal, m_axis_mem_write_data);
 
+    unpack_qp_context(s_axis_qp_interface, qp_context_internal);
+    unpack_if_conn_req(s_axis_qp_conn_interface, conn_req_internal);
+    unpack_tx_meta(s_axis_sq_meta, sq_meta_internal);
+
     rocev2<DATA_WIDTH>(			
 	   	s_axis_rx_data_internal,
 		m_axis_tx_data_internal,
 								
-		s_axis_sq_meta,
+		sq_meta_internal,
 		m_axis_rx_ack_meta,
 								
 		mem_write_cmd_internal,
@@ -344,8 +420,8 @@ void rocev2_top(
 		m_axis_mem_write_data_internal,
 		s_axis_mem_read_data_internal,
 
-		s_axis_qp_interface,
-		s_axis_qp_conn_interface,
+		qp_context_internal,
+		conn_req_internal,
 		local_ip_address,
 
 #ifdef DBG_IBV
