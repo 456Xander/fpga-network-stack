@@ -172,6 +172,70 @@ void rocev2(
     
 }
 
+// This function converts a stream of memCmd to a stream of ap_uint<128>
+// It assumes that 'num_cmds' commands will be processed.
+void convert_memCmd_stream(
+    hls::stream<memCmd>&       in_stream,
+    hls::stream<ap_uint<128> >& out_stream)
+{
+#pragma HLS INLINE
+
+        // Read one memCmd from the input stream (blocking read)
+        memCmd cmd = in_stream.read();
+
+        // Convert op_code to one-hot encoding (18 bits)
+        // (Assumes that op_code values are in the range 0..17)
+        ap_uint<18> op_hot = ((ap_uint<18>)1) << cmd.op_code;
+
+        // Create a 128-bit word to hold all packed fields.
+        ap_uint<128> packed = 0;
+        int bitPos = 0;
+
+        // Pack the one-hot op_code (18 bits)
+        packed.range(bitPos + 18 - 1, bitPos) = op_hot;
+        bitPos += 18;
+
+        // Pack qpn (16 bits)
+        packed.range(bitPos + 16 - 1, bitPos) = cmd.qpn;
+        bitPos += 16;
+
+        // Pack lst (1 bit)
+        packed.range(bitPos, bitPos) = cmd.lst;
+        bitPos += 1;
+
+        // Pack addr (48 bits)
+        packed.range(bitPos + 48 - 1, bitPos) = cmd.addr;
+        bitPos += 48;
+
+        // Pack dst (4 bits)
+        packed.range(bitPos + 4 - 1, bitPos) = cmd.dst;
+        bitPos += 4;
+
+        // Pack strm (2 bits)
+        packed.range(bitPos + 2 - 1, bitPos) = cmd.strm;
+        bitPos += 2;
+
+        // Pack len (28 bits)
+        packed.range(bitPos + 28 - 1, bitPos) = cmd.len;
+        bitPos += 28;
+
+        // Pack actv (1 bit)
+        packed.range(bitPos, bitPos) = cmd.actv;
+        bitPos += 1;
+
+        // Pack host (1 bit)
+        packed.range(bitPos, bitPos) = cmd.host;
+        bitPos += 1;
+
+        // Pack offs (6 bits)
+        packed.range(bitPos + 6 - 1, bitPos) = cmd.offs;
+        bitPos += 6;
+
+        // At this point, bitPos is 125. The remaining bits [127:125] are left as 0.
+        // Write the 128-bit packed word to the output stream.
+        out_stream.write(packed);
+}
+
 #if defined( __VITIS_HLS__)
 void rocev2_top(
 	stream<ap_axiu<DATA_WIDTH, 0, 0, 0> >& s_axis_rx_data,
@@ -182,8 +246,8 @@ void rocev2_top(
 	stream<ackMeta>& m_axis_rx_ack_meta,
 				
 	//Memory
-	stream<memCmd>& m_axis_mem_write_cmd,
-	stream<memCmd>& m_axis_mem_read_cmd,
+	stream<ap_uint<128>>& m_axis_mem_write_cmd,
+	stream<ap_uint<128>>& m_axis_mem_read_cmd,
 	stream<ap_axiu<DATA_WIDTH, 0, 0, 0> >& m_axis_mem_write_data,
 	stream<ap_axiu<DATA_WIDTH, 0, 0, 0> >& s_axis_mem_read_data,
 
@@ -255,6 +319,11 @@ void rocev2_top(
 	static hls::stream<net_axis<DATA_WIDTH> > s_axis_mem_read_data_internal;
 	#pragma HLS STREAM depth=2 variable=s_axis_mem_read_data_internal
 
+    static hls::stream<memCmd> mem_write_cmd_internal;
+	/*#pragma HLS STREAM depth=2 variable=mem_write_cmd_internal*/
+    static hls::stream<memCmd> mem_read_cmd_internal;
+	/*#pragma HLS STREAM depth=2 variable=mem_read_cmd_internal*/
+
 	convert_axis_to_net_axis<DATA_WIDTH>(s_axis_rx_data, s_axis_rx_data_internal);
 
 	convert_net_axis_to_axis<DATA_WIDTH>(m_axis_tx_data_internal, m_axis_tx_data);
@@ -263,15 +332,15 @@ void rocev2_top(
 
 	convert_net_axis_to_axis<DATA_WIDTH>(m_axis_mem_write_data_internal, m_axis_mem_write_data);
 
-   	rocev2<DATA_WIDTH>(			
+    rocev2<DATA_WIDTH>(			
 	   	s_axis_rx_data_internal,
 		m_axis_tx_data_internal,
 								
 		s_axis_sq_meta,
 		m_axis_rx_ack_meta,
 								
-		m_axis_mem_write_cmd,
-		m_axis_mem_read_cmd,
+		mem_write_cmd_internal,
+		mem_read_cmd_internal,
 		m_axis_mem_write_data_internal,
 		s_axis_mem_read_data_internal,
 
@@ -290,6 +359,9 @@ void rocev2_top(
 		regIbvCountRx,
         regIbvCountTx
 	);
+
+    convert_memCmd_stream(mem_read_cmd_internal, m_axis_mem_read_cmd);
+    convert_memCmd_stream(mem_write_cmd_internal, m_axis_mem_write_cmd);
 	
 #else
 void rocev2_top(
