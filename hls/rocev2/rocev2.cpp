@@ -139,14 +139,12 @@ template <int width> size_t count_trailing_zeros(ap_uint<width> value) {
 
 void unpack_qp_context(hls::stream<ap_uint<160>> &in_stream,
                        hls::stream<qpContext> &out_stream) {
-#pragma HLS INLINE
+#pragma HLS PIPELINE II = 1
 
-	ap_uint<160> data = in_stream.read();
 	qpContext unpacked;
 	if (!in_stream.empty()) {
-		ap_uint<6> state_onehot = data(5, 0);
-		unpacked.newState =
-		    static_cast<qpState>(count_trailing_zeros(state_onehot));
+        ap_uint<160> data = in_stream.read();
+		unpacked.newState = static_cast<qpState>(data(5, 0).to_uint());
 		unpacked.qp_num = data(29, 6);
 		unpacked.remote_psn = data(53, 30);
 		unpacked.local_psn = data(77, 54);
@@ -159,11 +157,11 @@ void unpack_qp_context(hls::stream<ap_uint<160>> &in_stream,
 
 void unpack_if_conn_req(hls::stream<ap_uint<184>> &in_stream,
                         hls::stream<ifConnReq> &out_stream) {
-#pragma HLS INLINE
+#pragma HLS PIPELINE II = 1
 
-	ap_uint<184> data = in_stream.read();
 	ifConnReq unpacked;
 	if (!in_stream.empty()) {
+        ap_uint<184> data = in_stream.read();
 		unpacked.qpn = data(15, 0);
 		unpacked.remote_qpn = data(39, 16);
 		unpacked.remote_ip_address = data(167, 40);
@@ -175,15 +173,13 @@ void unpack_if_conn_req(hls::stream<ap_uint<184>> &in_stream,
 
 void unpack_tx_meta(hls::stream<ap_uint<240>> &in_stream,
                     hls::stream<txMeta> &out_stream) {
-#pragma HLS INLINE
+#pragma HLS PIPELINE II = 1
 
-	ap_uint<240> data = in_stream.read();
 	txMeta unpacked;
 
 	if (!in_stream.empty()) {
-		ap_uint<18> opcode_oneshot = data(17, 0);
-		unpacked.op_code =
-		    static_cast<ibOpCode>(count_trailing_zeros(opcode_oneshot));
+        ap_uint<240> data = in_stream.read();
+		unpacked.op_code = static_cast<ibOpCode>(data(17, 0).to_uint());
 		unpacked.qpn = data(33, 18);
 		unpacked.host = data(34, 34);
 		unpacked.lst = data(35, 35);
@@ -199,13 +195,13 @@ void unpack_tx_meta(hls::stream<ap_uint<240>> &in_stream,
 
 void convert_memCmd_stream(hls::stream<memCmd> &in_stream,
                            hls::stream<ap_uint<128>> &out_stream) {
-#pragma HLS INLINE
+#pragma HLS PIPELINE II = 1
 	ap_uint<128> packed = 0;
 
 	if (!in_stream.empty()) {
 		memCmd cmd = in_stream.read();
-		ap_uint<18> op_hot = ((ap_uint<18>)1) << cmd.op_code;
-		packed(17, 0) = op_hot;
+		// ap_uint<18> op_hot = ((ap_uint<18>)1) << cmd.op_code;
+		packed(17, 0) = cmd.op_code;
 		packed(33, 18) = cmd.qpn;
 		packed(34, 34) = cmd.lst;
 		packed(82, 35) = cmd.addr;
@@ -306,8 +302,11 @@ void rocev2_top(stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &s_axis_rx_data,
 #pragma HLS STREAM depth = 2 variable = mem_read_cmd_internal
 
 	static hls::stream<txMeta> sq_meta_internal;
+#pragma HLS STREAM depth = 2 variable = sq_meta_internal
 	static hls::stream<qpContext> qp_context_internal;
+#pragma HLS STREAM depth = 2 variable = qp_context_internal
 	static hls::stream<ifConnReq> conn_req_internal;
+#pragma HLS STREAM depth = 2 variable = conn_req_internal
 
 	convert_axis_to_net_axis<DATA_WIDTH>(s_axis_rx_data,
 	                                     s_axis_rx_data_internal);

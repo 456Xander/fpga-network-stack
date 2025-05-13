@@ -491,72 +491,74 @@ void insert_icrc(
 					ii_state = CRC;
 #endif
 					ap_uint<64> keep = currWord.keep; //this is required to make the case statement work for all widths
-					switch(keep)
-					{
-					case 0xF:
-						currWord.data(63, 32) = crc;
-						currWord.keep(7,4) = 0xF;
-						break;
-					case 0xFF:
-						currWord.data(95, 64) = crc;
-						currWord.keep(11,8) = 0xF;
-						break;
-					case 0xFFF:
-						currWord.data(127, 96) = crc;
-						currWord.keep(15,12) = 0xF;
-						break;
-					case 0xFFFF:
-						currWord.data(159, 128) = crc;
-						currWord.keep(19,16) = 0xF;
-						break;
-					case 0xFFFFF:
-						currWord.data(191, 160) = crc;
-						currWord.keep(23,20) = 0xF;
-						break;
-					case 0xFFFFFF:
-						currWord.data(223, 192) = crc;
-						currWord.keep(27,24) = 0xF;
-						break;
-					case 0xFFFFFFF:
-						currWord.data(255, 224) = crc;
-						currWord.keep(31,28) = 0xF;
-						break;
-					case 0xFFFFFFFF:
-						currWord.data(287, 256) = crc;
-						currWord.keep(35,32) = 0xF;
-						break;
-					case 0xFFFFFFFFF:
-						currWord.data(319, 288) = crc;
-						currWord.keep(39,36) = 0xF;
-						break;
-					case 0xFFFFFFFFFF:
-						currWord.data(351, 320) = crc;
-						currWord.keep(43,40) = 0xF;
-						break;
-					case 0xFFFFFFFFFFF:
-						currWord.data(383, 352) = crc;
-						currWord.keep(47,44) = 0xF;
-						break;
-					case 0xFFFFFFFFFFFF:
-						currWord.data(415, 384) = crc;
-						currWord.keep(51,48) = 0xF;
-						break;
-					case 0xFFFFFFFFFFFFF:
-						currWord.data(447, 416) = crc;
-						currWord.keep(55,52) = 0xF;
-						break;
-					case 0xFFFFFFFFFFFFFF:
-						currWord.data(479, 448) = crc;
-						currWord.keep(59,56) = 0xF;
-						break;
-					case 0xFFFFFFFFFFFFFFF:
-						currWord.data(511, 480) = crc;
-						currWord.keep(63,60) = 0xF;
-						break;
-					//case 0xFFFFFFFF:
-						//TODO should not be reached
-						//break;
-					} //switch
+
+					// switch(keep)
+					// {
+					// case 0xF:
+					// 	currWord.data(63, 32) = crc;
+					// 	currWord.keep(7,4) = 0xF;
+					// 	break;
+					// case 0xFF:
+					// 	currWord.data(95, 64) = crc;
+					// 	currWord.keep(11,8) = 0xF;
+					// 	break;
+					// case 0xFFF:
+					// 	currWord.data(127, 96) = crc;
+					// 	currWord.keep(15,12) = 0xF;
+					// 	break;
+					// case 0xFFFF:
+					// 	currWord.data(159, 128) = crc;
+					// 	currWord.keep(19,16) = 0xF;
+					// 	break;
+					// case 0xFFFFF:
+					// 	currWord.data(191, 160) = crc;
+					// 	currWord.keep(23,20) = 0xF;
+					// 	break;
+					// case 0xFFFFFF:
+					// 	currWord.data(223, 192) = crc;
+					// 	currWord.keep(27,24) = 0xF;
+					// 	break;
+					// case 0xFFFFFFF:
+					// 	currWord.data(255, 224) = crc;
+					// 	currWord.keep(31,28) = 0xF;
+					// 	break;
+					// case 0xFFFFFFFF:
+					// 	currWord.data(287, 256) = crc;
+					// 	currWord.keep(35,32) = 0xF;
+					// 	break;
+					// case 0xFFFFFFFFF:
+					// 	currWord.data(319, 288) = crc;
+					// 	currWord.keep(39,36) = 0xF;
+					// 	break;
+					// case 0xFFFFFFFFFF:
+					// 	currWord.data(351, 320) = crc;
+					// 	currWord.keep(43,40) = 0xF;
+					// 	break;
+					// case 0xFFFFFFFFFFF:
+					// 	currWord.data(383, 352) = crc;
+					// 	currWord.keep(47,44) = 0xF;
+					// 	break;
+					// case 0xFFFFFFFFFFFF:
+					// 	currWord.data(415, 384) = crc;
+					// 	currWord.keep(51,48) = 0xF;
+					// 	break;
+					// case 0xFFFFFFFFFFFFF:
+					// 	currWord.data(447, 416) = crc;
+					// 	currWord.keep(55,52) = 0xF;
+					// 	break;
+					// case 0xFFFFFFFFFFFFFF:
+					// 	currWord.data(479, 448) = crc;
+					// 	currWord.keep(59,56) = 0xF;
+					// 	break;
+					// case 0xFFFFFFFFFFFFFFF:
+					// 	currWord.data(511, 480) = crc;
+					// 	currWord.keep(63,60) = 0xF;
+					// 	break;
+					// //case 0xFFFFFFFF:
+					// 	//TODO should not be reached
+					// 	//break;
+					// } //switch
+
 				} //keep
 			} //last
 			output.write(currWord);
