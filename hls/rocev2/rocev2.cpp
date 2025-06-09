@@ -143,7 +143,7 @@ void unpack_qp_context(hls::stream<ap_uint<160>> &in_stream,
 
 	qpContext unpacked;
 	if (!in_stream.empty()) {
-        ap_uint<160> data = in_stream.read();
+		ap_uint<160> data = in_stream.read();
 		unpacked.newState = static_cast<qpState>(data(5, 0).to_uint());
 		unpacked.qp_num = data(29, 6);
 		unpacked.remote_psn = data(53, 30);
@@ -161,7 +161,7 @@ void unpack_if_conn_req(hls::stream<ap_uint<184>> &in_stream,
 
 	ifConnReq unpacked;
 	if (!in_stream.empty()) {
-        ap_uint<184> data = in_stream.read();
+		ap_uint<184> data = in_stream.read();
 		unpacked.qpn = data(15, 0);
 		unpacked.remote_qpn = data(39, 16);
 		unpacked.remote_ip_address = data(167, 40);
@@ -178,16 +178,16 @@ void unpack_tx_meta(hls::stream<ap_uint<240>> &in_stream,
 	txMeta unpacked;
 
 	if (!in_stream.empty()) {
-        ap_uint<240> data = in_stream.read();
-		unpacked.op_code = static_cast<ibOpCode>(data(17, 0).to_uint());
-		unpacked.qpn = data(33, 18);
-		unpacked.host = data(34, 34);
-		unpacked.lst = data(35, 35);
-		unpacked.offs = data(41, 36);
-		unpacked.raddr = data(105, 42);
-		unpacked.laddr = data(169, 106);
-		unpacked.len = data(201, 170);
-		unpacked.imm = data(233, 202);
+		ap_uint<224> data = in_stream.read();
+		unpacked.op_code = static_cast<ibOpCode>(data(7, 0).to_uint());
+		unpacked.qpn = data(23, 8);
+		unpacked.host = data(24, 24);
+		unpacked.lst = data(25, 25);
+		unpacked.offs = data(31, 26);
+		unpacked.raddr = data(95, 32);
+		unpacked.laddr = data(159, 96);
+		unpacked.len = data(191, 160);
+		unpacked.imm = data(223, 192);
 
 		out_stream.write(unpacked);
 	}
@@ -196,22 +196,21 @@ void unpack_tx_meta(hls::stream<ap_uint<240>> &in_stream,
 void convert_memCmd_stream(hls::stream<memCmd> &in_stream,
                            hls::stream<ap_uint<128>> &out_stream) {
 #pragma HLS PIPELINE II = 1
-	ap_uint<128> packed = 0;
+	ap_uint<120> packed = 0;
 
 	if (!in_stream.empty()) {
 		memCmd cmd = in_stream.read();
-		// ap_uint<18> op_hot = ((ap_uint<18>)1) << cmd.op_code;
-		packed(17, 0) = cmd.op_code;
-		packed(33, 18) = cmd.qpn;
-		packed(34, 34) = cmd.lst;
-		packed(82, 35) = cmd.addr;
-		packed(86, 83) = cmd.dst;
-		packed(88, 87) = cmd.strm;
-		packed(116, 89) = cmd.len;
-		packed(117, 117) = cmd.actv;
-		packed(118, 118) = cmd.host;
-		packed(124, 119) = cmd.offs;
-		packed(127, 125) = 0;
+		packed(7, 0) = cmd.op_code;
+		packed(23, 8) = cmd.qpn;
+		packed(24, 24) = cmd.lst;
+		packed(72, 25) = cmd.addr;
+		packed(76, 73) = cmd.dst;
+		packed(78, 77) = cmd.strm;
+		packed(106, 79) = cmd.len;
+		packed(107, 107) = cmd.actv;
+		packed(108, 108) = cmd.host;
+		packed(114, 109) = cmd.offs;
+		packed(119, 115) = 0;
 
 		out_stream.write(packed);
 	}
