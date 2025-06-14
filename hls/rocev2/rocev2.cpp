@@ -171,7 +171,7 @@ void unpack_if_conn_req(hls::stream<ap_uint<184>> &in_stream,
 	}
 }
 
-void unpack_tx_meta(hls::stream<ap_uint<240>> &in_stream,
+void unpack_tx_meta(hls::stream<ap_uint<224>> &in_stream,
                     hls::stream<txMeta> &out_stream) {
 #pragma HLS PIPELINE II = 1
 
@@ -194,7 +194,7 @@ void unpack_tx_meta(hls::stream<ap_uint<240>> &in_stream,
 }
 
 void convert_memCmd_stream(hls::stream<memCmd> &in_stream,
-                           hls::stream<ap_uint<128>> &out_stream) {
+                           hls::stream<ap_uint<120>> &out_stream) {
 #pragma HLS PIPELINE II = 1
 	ap_uint<120> packed = 0;
 
@@ -220,13 +220,13 @@ void convert_memCmd_stream(hls::stream<memCmd> &in_stream,
 void rocev2_top(stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &s_axis_rx_data,
                 stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &m_axis_tx_data,
 
-                stream<ap_uint<240>> &s_axis_sq_meta,
+                stream<ap_uint<224>> &s_axis_sq_meta,
 
                 stream<ackMeta> &m_axis_rx_ack_meta,
 
                 // Memory
-                stream<ap_uint<128>> &m_axis_mem_write_cmd,
-                stream<ap_uint<128>> &m_axis_mem_read_cmd,
+                stream<ap_uint<120>> &m_axis_mem_write_cmd,
+                stream<ap_uint<120>> &m_axis_mem_read_cmd,
                 stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &m_axis_mem_write_data,
                 stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &s_axis_mem_read_data,
 

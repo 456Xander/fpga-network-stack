@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-#define RETRANS_EN
+// #define RETRANS_EN
 
 const unsigned DATA_WIDTH = ${DATA_WIDTH} * 8;
 

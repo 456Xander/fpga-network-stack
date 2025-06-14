@@ -547,7 +547,11 @@ void rx_exh_fsm(
 		}
 		break;
 	case DMA_META:
-		if (!msnTable2rxExh_rsp.empty() && !udpLengthFifo.empty() && (!consumeReadInit || !retrans2rx_init.empty()))
+		if (!msnTable2rxExh_rsp.empty() && !udpLengthFifo.empty() && (!consumeReadInit
+                #ifdef RETRANS_EN
+                || !retrans2rx_init.empty()
+                #endif // DEBUG
+            ))
 		{
 
 			msnTable2rxExh_rsp.read(dmaMeta);
@@ -557,11 +561,11 @@ void rx_exh_fsm(
 			{
 				readReqTable_rsp.read(readReqMeta);
 			}*/
-#endif
 			if (consumeReadInit)
 			{
 				retrans2rx_init.read(readReqInit);
 			}
+#endif
 			pe_fsmState = DATA;
 		}
 		break;
@@ -1431,6 +1435,9 @@ void generate_ibh(
 			header.clear();
 
 			header.setOpCode(meta.op_code);
+            if (meta.op_code == RC_SEND_LAST || meta.op_code == RC_SEND_ONLY) {
+                    header.setSolicitedEvent(true);
+            }
 			header.setPartitionKey(meta.partition_key);
 			//PSN only valid for READ_RSP, otherwise we get it in state GET_PSN
 			header.setPsn(meta.psn);

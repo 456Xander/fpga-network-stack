@@ -379,6 +379,9 @@ public:
 	{
 		header(7, 0) =  (uint8_t) opcode;
 	}
+    void setSolicitedEvent(bool se) {
+        header[15] = se;
+    }
 	ibOpCode getOpCode()
 	{
 		return ibOpCode((uint16_t) header(7, 0));
